@@ -126,6 +126,32 @@ class Node {
   };
 }
 
+// src/models/Book.js
+class Book extends Model {
+  constructor({ book = [], page = 0 }) {
+    super({});
+    this.observers.add = [];
+    this.book = book;
+    this.page = page;
+  }
+  addParagraph(paragraph) {
+    if (!this.book[this.page])
+      this.book[this.page] = [];
+    this.book[this.page].push(paragraph);
+    this.notify.add(paragraph);
+  }
+  subscribe = {
+    add: (observer) => {
+      this.observers.add.push(observer);
+    }
+  };
+  notify = {
+    add: (data) => {
+      this.observers.add.forEach((observer) => observer(data));
+    }
+  };
+}
+
 // src/models/Engine.js
 class Engine extends Model {
   constructor({ scenes = {}, start = null }) {
@@ -134,10 +160,9 @@ class Engine extends Model {
     this.load.scenes(scenes);
     this.node = this.scenes[start];
     this.tag = [];
-    this.book = [];
+    this.book = new Book({ book: [], page: 0 });
     if (this.node)
-      this.book = [[[["body", this.node.body]]]];
-    this.page = 0;
+      this.book.addParagraph([["body", this.node.body]]);
   }
   choicesTag(tags) {
     switch (type(tags)) {
@@ -159,18 +184,17 @@ class Engine extends Model {
       switch (op) {
         case "add":
           const add_prop = command[1];
-          if (type(this[add_prop]) === "Array") {
-            command.slice(2).forEach((tag) => {
+          if (add_prop === "tag") {
+            for (const tag of command.slice(2))
               if (!this[add_prop].includes(tag))
                 this[add_prop].push(tag);
-            });
-          } else if (type(this[add_prop]) === "Number") {
-            this[add_prop] += command[2] ?? 1;
+          } else if (add_prop === "page") {
+            this.book.page += command[2] ?? 1;
           }
           break;
         case "del":
           const del_prop = command[1];
-          this[del_prop] = this[del_prop].filter((index) => !(index in command[op].slice(2)));
+          this[del_prop] = this[del_prop].filter((index) => !(index in command.slice(2)));
           break;
       }
     }
@@ -196,9 +220,7 @@ class Engine extends Model {
     if (type(new_node) == "Node") {
       this.interpret(node_choice.effect);
       this.interpret(new_node.effect);
-      if (!this.book[this.page])
-        this.book[this.page] = [];
-      this.book[this.page].push([
+      this.book.addParagraph([
         ["transition", node_choice.transition()],
         ["body", new_node.body]
       ]);
@@ -236,6 +258,46 @@ class Engine extends Model {
   };
 }
 
+// src/views/BookView.js
+class BookView {
+  constructor({ root = null, book = null, page = 0 }) {
+    this.root = root;
+    this.book = book;
+    this.page = page;
+    if (book.book[page] && book.book[page][0])
+      this.addParagraph(book.book[page][0]);
+    this.book.subscribe.add(this.addParagraph.bind(this));
+  }
+  render(book, page) {
+    this.book[page];
+  }
+  addParagraph(paragraph) {
+    if (this.page !== this.book.page) {
+      this.root.innerHTML = "";
+      this.page = this.book.page;
+    }
+    let paraHTML = document.createElement("div");
+    let transition_next = "";
+    for (const sentence of paragraph) {
+      if (sentence[0] == "transition") {
+        if (sentence[1].endsWith("\n")) {
+          paraHTML.innerHTML += `<p class="transition">${sentence[1]}</p>`;
+        } else {
+          transition_next = `<span class="transition">${sentence[1]}</span> `;
+        }
+      } else if (sentence[0] == "body") {
+        paraHTML.innerHTML += sentence[1].split("\n").map((element, index) => {
+          if (index)
+            return `<p>${element}</p>`;
+          else
+            return `<p>${transition_next}${element}</p>`;
+        }).join("");
+      }
+    }
+    [...paraHTML.children].forEach((child) => this.root.appendChild(child));
+  }
+}
+
 // src/views/EngineView.js
 class EngineView {
   options = [];
@@ -265,36 +327,12 @@ class EngineView {
     });
     this.render.bind(this);
     if (this.engine) {
+      this.book = new BookView({ root: this.body, book: this.engine.book });
       this.engine.subscribe(this.render.bind(this));
       this.render(this.engine);
     }
   }
   render(engine) {
-    if (engine.book && engine.book[engine.page]) {
-      this.body.innerHTML = "";
-      for (const paragraph of engine.book[engine.page]) {
-        let paraHTML = document.createElement("div");
-        let transition_next = "";
-        for (const sentence of paragraph) {
-          if (sentence[0] == "transition") {
-            if (sentence[1].endsWith("\n")) {
-              paraHTML.innerHTML += `<p class="transition">${sentence[1]}</p>`;
-            } else {
-              transition_next = `<span class="transition">${sentence[1]}</span> `;
-            }
-          } else if (sentence[0] == "body") {
-            paraHTML.innerHTML += sentence[1].split("\n").map((element, index2) => {
-              if (index2)
-                return `<p>${element}</p>`;
-              else
-                return `<p>${transition_next}${element}`;
-            }).join("");
-          }
-        }
-        this.body.innerHTML += paraHTML.innerHTML;
-      }
-      window.scrollTo(0, this.body.scrollHeight);
-    }
     const choices = engine.choices();
     let index = 1;
     this.optionBase.innerHTML = "";
@@ -323,6 +361,7 @@ class EngineView {
     }
     if (engine.node.title)
       this.title.innerText = engine.node.title;
+    window.scrollTo(0, this.body.scrollHeight);
   }
 }
 
