@@ -66,6 +66,17 @@ h6 {
 	isolation: isolate;
 }
 
+button {
+	border: none;
+	background: none;
+	font-family: inherit;
+	font-size: inherit;
+	color: inherit;
+	appearance: none;
+	-webkit-appearance: none;
+	-moz-appearance: none;
+}
+
 /*
  * ------------------------------------
  *      STYLESHEET STARTS HERE
@@ -146,23 +157,48 @@ body {
 	margin-right: 8px;
 }
 
-header {
+#header {
 	display: flex;
 	flex-direction: row;
 	font-size: 16px;
 	justify-content: space-between;
 }
 
-header button {
-	background-color: inherit;
+#header button {
+	background-color: black;
 	color: #999;
 	border: 1px #999 solid;
 }
 
-header button:hover {
+#header button:hover {
 	cursor: pointer;
 	border: 1px #999 solid;
 	color: #f0f0f0;
+}
+
+main {
+	display: flex;
+	flex-direction: row;
+	gap: 32px;
+}
+
+#tag_container {
+	font-family: Courier;
+	font-size: 14px;
+	margin-top: 1em;
+}
+
+#tag_header {
+	text-align: right;
+}
+
+#tags {
+	border: 1px solid #999;
+	padding: 4px;
+}
+
+#tags:empty {
+	display: none;
 }
 
 @media screen and (max-width: 767px) {
@@ -196,5 +232,9 @@ header button:hover {
 	.option:active {
 		user-select: none;
 		color: #f0f0f0;
+	}
+
+	#tag_container {
+		display: none;
 	}
 }

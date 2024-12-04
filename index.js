@@ -374,8 +374,6 @@ class EngineView {
     this.root = root;
     if (!root)
       console.err("No root element specified to attach main view");
-    this.base = document.createElement("div");
-    this.root.appendChild(this.base);
     this.engine = engine;
     this.body = document.createElement("main");
     this.optionBase = document.createElement("div");
@@ -389,15 +387,26 @@ class EngineView {
     this.reset.onclick = (event) => {
       this.engine.reset();
     };
-    this.header = tag("header", { children: [this.title, this.reset] });
+    this.header = tag("div", {
+      id: "header",
+      children: [this.title, this.reset]
+    });
     if (engine.title && engine.title)
       this.title.innerText = engine.node.title;
     else
       this.title.innerText = "A Story";
-    this.base.appendChild(this.header);
-    this.base.appendChild(this.body);
-    this.base.appendChild(this.optionBase);
-    this.body.id = "body";
+    this.tags = tag("aside", { id: "tags" });
+    this.tag_header = tag("h3", { id: "tag_header", textContent: "tags" });
+    this.tag_container = tag("div", {
+      id: "tag_container",
+      children: [this.tag_header, this.tags]
+    });
+    this.body = tag("article", { id: "body" });
+    this.main = tag("main", { children: [this.body, this.tag_container] });
+    this.base = tag("div", {
+      children: [this.header, this.main, this.optionBase]
+    });
+    this.root.appendChild(this.base);
     document.addEventListener("keydown", (event) => {
       let opt = document.querySelector(`[data-option='${event.key}']`);
       if (opt)
@@ -438,6 +447,10 @@ class EngineView {
       this.optionBase.appendChild(div);
       div.dataset.option = index;
       index++;
+    }
+    this.tags.innerHTML = "";
+    for (const player_tag of this.engine.tag) {
+      this.tags.appendChild(tag("p", { textContent: player_tag }));
     }
     this.title.innerText = engine.title;
     window.scrollTo(0, this.body.scrollHeight);
