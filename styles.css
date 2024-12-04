@@ -108,7 +108,7 @@ body {
 }
 
 .option {
-	color: #aaa;
+	color: #999;
 	cursor: pointer;
 	display: inline;
 	min-height: 1.5em;
@@ -131,7 +131,6 @@ body {
 .option .label {
 	color: #f0f0f0;
 	width: fit-content;
-	gap: 12px;
 	font-size: 16px;
 	border: solid 1px #999;
 	display: inline;
@@ -145,6 +144,25 @@ body {
 .transition {
 	color: #999;
 	margin-right: 8px;
+}
+
+header {
+	display: flex;
+	flex-direction: row;
+	font-size: 16px;
+	justify-content: space-between;
+}
+
+header button {
+	background-color: inherit;
+	color: #999;
+	border: 1px #999 solid;
+}
+
+header button:hover {
+	cursor: pointer;
+	border: 1px #999 solid;
+	color: #f0f0f0;
 }
 
 @media screen and (max-width: 767px) {

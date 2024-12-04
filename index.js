@@ -32,10 +32,6 @@ class Choice {
     effect = {},
     title = null
   }) {
-    if (target === null)
-      throw Error(`target is missing`);
-    if (typeof target !== "string")
-      throw Error(`target is not type string`);
     this.id = id;
     if (!this.id)
       this.id = target;
@@ -75,6 +71,19 @@ function type(obj) {
     function: "Function",
     object: "Object"
   }[obj_type] ?? null;
+}
+function tag(element = "div", { id = null, className = null, children = [], textContent = null }) {
+  const el = document.createElement(element);
+  if (id)
+    el.id = id;
+  if (className)
+    el.className = className;
+  if (textContent)
+    el.textContent = textContent;
+  for (const child of children) {
+    el.appendChild(child);
+  }
+  return el;
 }
 
 // src/models/Node.js
@@ -131,6 +140,7 @@ class Book extends Model {
   constructor({ book = [], page = 0 }) {
     super({});
     this.observers.add = [];
+    this.observers.load = [];
     this.book = book;
     this.page = page;
   }
@@ -143,25 +153,49 @@ class Book extends Model {
   subscribe = {
     add: (observer) => {
       this.observers.add.push(observer);
+    },
+    load: (observer) => {
+      this.observers.load.push(observer);
     }
   };
   notify = {
     add: (data) => {
       this.observers.add.forEach((observer) => observer(data));
+    },
+    load: (data = null) => {
+      this.observers.load.forEach((observer) => observer(data));
     }
   };
+  reset(start) {
+    this.book = [[]];
+    this.book[0].push(start);
+    this.page = 0;
+  }
 }
 
 // src/models/Engine.js
 class Engine extends Model {
-  constructor({ scenes = {}, start = null }) {
+  constructor({
+    scenes = {},
+    node = null,
+    tag: tag2 = [],
+    book = [],
+    page = 0,
+    start = "start",
+    title = "A Story"
+  }) {
     super();
     this.scenes = {};
     this.load.scenes(scenes);
-    this.node = this.scenes[start];
-    this.tag = [];
-    this.book = new Book({ book: [], page: 0 });
-    if (this.node)
+    this.start = start;
+    this.node = this.scenes[node] ?? this.scenes[start];
+    if (this.node && this.node.title)
+      this.title = this.node.title;
+    else
+      this.title = title;
+    this.tag = tag2;
+    this.book = new Book({ book, page });
+    if (!this.book.book[this.book.page])
       this.book.addParagraph([["body", this.node.body]]);
   }
   choicesTag(tags) {
@@ -185,9 +219,9 @@ class Engine extends Model {
         case "add":
           const add_prop = command[1];
           if (add_prop === "tag") {
-            for (const tag of command.slice(2))
-              if (!this[add_prop].includes(tag))
-                this[add_prop].push(tag);
+            for (const tag2 of command.slice(2))
+              if (!this[add_prop].includes(tag2))
+                this[add_prop].push(tag2);
           } else if (add_prop === "page") {
             this.book.page += command[2] ?? 1;
           }
@@ -195,6 +229,12 @@ class Engine extends Model {
         case "del":
           const del_prop = command[1];
           this[del_prop] = this[del_prop].filter((index) => !(index in command.slice(2)));
+          break;
+        case "reset":
+          this.reset();
+          break;
+        case "stay":
+          this.book.page--;
           break;
       }
     }
@@ -205,8 +245,8 @@ class Engine extends Model {
     let node_choices = this.node.choices();
     for (const key in node_choices) {
       if (node_choices[key].tag.length) {
-        for (const tag of node_choices[key].tag) {
-          if (this.tag.includes(tag))
+        for (const tag2 of node_choices[key].tag) {
+          if (this.tag.includes(tag2))
             choices[key] = node_choices[key];
         }
       } else
@@ -216,8 +256,13 @@ class Engine extends Model {
   }
   choose(choice) {
     const node_choice = this.node.choices(choice);
+    if (type(node_choice.target) === "Null") {
+      this.interpret(node_choice.effect);
+      return this.node;
+    }
     const new_node = this.scenes[node_choice.target];
     if (type(new_node) == "Node") {
+      this.book.page++;
       this.interpret(node_choice.effect);
       this.interpret(new_node.effect);
       this.book.addParagraph([
@@ -226,7 +271,10 @@ class Engine extends Model {
       ]);
       this.node = new_node;
     }
+    if (this.node.title)
+      this.title = this.node.title;
     this.notify(this);
+    this.save();
     return this.node;
   }
   load = {
@@ -256,6 +304,24 @@ class Engine extends Model {
       }
     }
   };
+  async save() {
+    localStorage.setItem("persist", JSON.stringify({
+      book: this.book.book,
+      page: this.book.page,
+      tag: this.tag,
+      title: this.title,
+      node: this.node.id
+    }));
+  }
+  reset() {
+    this.tag = [];
+    this.node = this.scenes[this.start];
+    this.title = this.node.title ?? "A story";
+    this.book.reset([["body", this.node.body]]);
+    this.save();
+    this.notify(this);
+    this.book.notify.load(this.book);
+  }
 }
 
 // src/views/BookView.js
@@ -264,12 +330,15 @@ class BookView {
     this.root = root;
     this.book = book;
     this.page = page;
-    if (book.book[page] && book.book[page][0])
-      this.addParagraph(book.book[page][0]);
     this.book.subscribe.add(this.addParagraph.bind(this));
+    this.book.subscribe.load(this.render.bind(this));
+    this.render();
   }
-  render(book, page) {
-    this.book[page];
+  render() {
+    this.root.innerHTML = "";
+    for (const paragraph of this.book.book[this.book.page]) {
+      this.addParagraph(paragraph);
+    }
   }
   addParagraph(paragraph) {
     if (this.page !== this.book.page) {
@@ -308,15 +377,24 @@ class EngineView {
     this.base = document.createElement("div");
     this.root.appendChild(this.base);
     this.engine = engine;
-    this.body = document.createElement("div");
+    this.body = document.createElement("main");
     this.optionBase = document.createElement("div");
     this.optionBase.id = "optionBase";
     this.title = document.createElement("h2");
-    if (engine.node && engine.node.title)
+    this.reset = tag("button", {
+      id: "reset",
+      textContent: "Reset",
+      className: "label"
+    });
+    this.reset.onclick = (event) => {
+      this.engine.reset();
+    };
+    this.header = tag("header", { children: [this.title, this.reset] });
+    if (engine.title && engine.title)
       this.title.innerText = engine.node.title;
     else
       this.title.innerText = "A Story";
-    this.base.appendChild(this.title);
+    this.base.appendChild(this.header);
     this.base.appendChild(this.body);
     this.base.appendChild(this.optionBase);
     this.body.id = "body";
@@ -340,6 +418,9 @@ class EngineView {
       const choice = choices[key];
       const div = document.createElement("div");
       div.className = "option";
+      div.tabIndex = 0;
+      div.addEventListener("click", () => engine.choose(choice.id));
+      div.role = "button";
       const label = document.createElement("p");
       label.className = "label";
       label.innerHTML = `<span>${index}</span> <span>${choice.title}</span>`;
@@ -356,11 +437,9 @@ class EngineView {
       div.appendChild(preview_container);
       this.optionBase.appendChild(div);
       div.dataset.option = index;
-      div.addEventListener("click", () => engine.choose(choice.id));
       index++;
     }
-    if (engine.node.title)
-      this.title.innerText = engine.node.title;
+    this.title.innerText = engine.title;
     window.scrollTo(0, this.body.scrollHeight);
   }
 }
@@ -370,6 +449,17 @@ var engine = null;
 var view = null;
 fetch("./scenes.json").then((response) => response.text()).then((body) => {
   const data = JSON.parse(body);
-  engine = new Engine({ scenes: data, start: "start" });
+  const save = JSON.parse(localStorage.getItem("persist"));
+  if (save) {
+    engine = new Engine({
+      scenes: data,
+      ...save
+    });
+  } else {
+    engine = new Engine({
+      scenes: data,
+      node: "start"
+    });
+  }
   view = new EngineView(document.querySelector("body"), engine);
 });
