@@ -93,18 +93,19 @@ button {
 :root {
 	background-color: #040404;
 	color: #e9e9e9;
-	letter-spacing: 0.02em;
+	/*letter-spacing: 0.02em;*/
 	font-size: 18px;
 }
 
 body {
-	padding: 12vh 12vw 12vh 12vw;
+	padding: 5vh 12vw 12vh 12vw;
 	overflow-y: scroll;
 }
 
+/*
 #body p + p {
 	text-indent: 3em;
-}
+}*/
 
 #body p {
 	margin-top: 8px;
@@ -115,11 +116,12 @@ body {
 	display: flex;
 	flex-direction: column;
 	gap: 4px;
-	padding-left: 16px;
+	padding-left: 8px;
+	border-left: 1px solid #444;
 }
 
 .option {
-	color: #999;
+	color: #aaa;
 	cursor: pointer;
 	display: inline;
 	min-height: 1.5em;
@@ -142,8 +144,8 @@ body {
 .option .label {
 	color: #f0f0f0;
 	width: fit-content;
-	font-size: 16px;
-	border: solid 1px #999;
+	font-size: 0.9em;
+	border: solid 1px #555;
 	display: inline;
 	padding: 0 8px 0 4px;
 }
@@ -153,7 +155,8 @@ body {
 }
 
 .transition {
-	color: #999;
+	color: #aaa;
+	font-style: italic;
 	margin-right: 8px;
 }
 
@@ -182,19 +185,45 @@ main {
 	gap: 32px;
 }
 
+#tags {
+	display: flex;
+	flex-direction: row;
+	gap: 8px;
+	overflow-x: scroll;
+	scrollbar-width: none;
+}
+
 #tag_container {
 	font-family: Courier;
+	display: flex;
+	flex-direction: row;
 	font-size: 14px;
-	margin-top: 1em;
+	gap: 4px;
+	margin-top: 8px;
+}
+
+#tag_container h3 {
+	font-weight: normal;
 }
 
 #tag_header {
 	text-align: right;
 }
 
-#tags {
-	border: 1px solid #999;
-	padding: 4px;
+.tag {
+	user-select: none;
+	border: 1px solid #444;
+	color: #aaa;
+	padding: 0px 4px 0px 4px;
+}
+
+.optionTag {
+	font-family: Courier;
+	font-size: 14px;
+	border: 1px solid #444;
+	color: #aaa;
+	padding: 0px 4px 0px 4px;
+	margin-left: 18px;
 }
 
 #tags:empty {
@@ -205,7 +234,11 @@ main {
 	/* smartphones, iPhone, portrait 480x320 phones */
 
 	body {
-		padding: 32px;
+		padding: 16px;
+	}
+
+	#tags {
+		margin-right: 4px;
 	}
 
 	.option {
@@ -214,7 +247,10 @@ main {
 
 	.option * {
 		display: inline;
-		padding: 0px;
+	}
+
+	.optionTag {
+		padding: 0px 4px 0 4px;
 	}
 
 	.option .label {
@@ -223,6 +259,10 @@ main {
 
 	#optionBase {
 		padding: 0px;
+		padding-left: 6px;
+		line-height: 1.25em;
+		border-left: 1px solid #444;
+		gap: 8px;
 	}
 
 	#optionBase:empty {
@@ -232,9 +272,5 @@ main {
 	.option:active {
 		user-select: none;
 		color: #f0f0f0;
-	}
-
-	#tag_container {
-		display: none;
 	}
 }

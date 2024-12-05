@@ -18,11 +18,6 @@ class Model {
 
 // src/models/Choice.js
 class Choice {
-  #transition = {
-    neutral: {
-      entry: null
-    }
-  };
   constructor({
     id = null,
     target = null,
@@ -33,6 +28,8 @@ class Choice {
     title = null
   }) {
     this.id = id;
+    if (!id && !target)
+      throw Error("Choice needs an id, or a unique target");
     if (!this.id)
       this.id = target;
     this.target = target;
@@ -40,17 +37,7 @@ class Choice {
     this.tag = tag;
     this.effect = effect;
     this.title = title;
-    if (transition && typeof transition === "string")
-      this.#transition.neutral.entry = transition;
-    else if (transition && typeof transition == "object")
-      this.#transition = { ...this.#transition, ...transition };
-  }
-  transition(tag = null, context = null) {
-    if (tag === null && context === null)
-      return this.#transition.neutral.entry;
-    if (this.#transition[tag])
-      return this.#transition[tag][context] || null;
-    return null;
+    this.transition = transition;
   }
 }
 
@@ -117,20 +104,9 @@ class Node {
   }
   add = {
     choice: (choice) => {
-      switch (type(choice)) {
-        case "Choice":
-          this.#choices[choice.target] = choice;
-          return this.#choices;
-        case "String":
-          this.#choices[choice] = new Choice({ target: choice });
-          return this.#choices;
-        case "Object":
-          const newChoice = new Choice(choice);
-          this.#choices[newChoice.id] = newChoice;
-          return this.#choices;
-        default:
-          throw Error("choice is not supported type");
-      }
+      const newChoice = new Choice(choice);
+      this.#choices[newChoice.id] = newChoice;
+      return this.#choices;
     }
   };
 }
@@ -151,20 +127,12 @@ class Book extends Model {
     this.notify.add(paragraph);
   }
   subscribe = {
-    add: (observer) => {
-      this.observers.add.push(observer);
-    },
-    load: (observer) => {
-      this.observers.load.push(observer);
-    }
+    add: (observer) => this.observers.add.push(observer),
+    load: (observer) => this.observers.load.push(observer)
   };
   notify = {
-    add: (data) => {
-      this.observers.add.forEach((observer) => observer(data));
-    },
-    load: (data = null) => {
-      this.observers.load.forEach((observer) => observer(data));
-    }
+    add: (data = null) => this.observers.add.forEach((observer) => observer(data)),
+    load: (data = null) => this.observers.load.forEach((observer) => observer(data))
   };
   reset(start) {
     this.book = [[]];
@@ -228,7 +196,7 @@ class Engine extends Model {
           break;
         case "del":
           const del_prop = command[1];
-          this[del_prop] = this[del_prop].filter((index) => !(index in command.slice(2)));
+          this[del_prop] = this[del_prop].filter((index) => !command.slice(2).includes(index));
           break;
         case "reset":
           this.reset();
@@ -266,7 +234,7 @@ class Engine extends Model {
       this.interpret(node_choice.effect);
       this.interpret(new_node.effect);
       this.book.addParagraph([
-        ["transition", node_choice.transition()],
+        ["transition", node_choice.transition],
         ["body", new_node.body]
       ]);
       this.node = new_node;
@@ -279,8 +247,7 @@ class Engine extends Model {
   }
   load = {
     scenes: (scenes) => {
-      const scene_type = type(scenes);
-      if (scene_type === "Object") {
+      if (type(scenes) === "Object") {
         for (const scene in scenes) {
           if (scenes[scene].id)
             this.scenes[scene] = new Node({
@@ -289,17 +256,6 @@ class Engine extends Model {
             });
           else
             this.scenes[scene] = new Node({ ...scene });
-        }
-      } else if (scene_type === "Array") {
-        for (const scene of scenes) {
-          if (!scene.id)
-            throw Error("scene doesn't contain id");
-          if (type(scene.id) !== "String")
-            throw Error("id isn't string.");
-          this.scenes[scene.id] = new Node({
-            id: scenes[scene].id,
-            ...scenes[scene]
-          });
         }
       }
     }
@@ -396,15 +352,15 @@ class EngineView {
     else
       this.title.innerText = "A Story";
     this.tags = tag("aside", { id: "tags" });
-    this.tag_header = tag("h3", { id: "tag_header", textContent: "tags" });
+    this.tag_header = tag("h3", { id: "tag_header", textContent: "tags:" });
     this.tag_container = tag("div", {
       id: "tag_container",
-      children: [this.tag_header, this.tags]
+      children: [this.tags]
     });
     this.body = tag("article", { id: "body" });
-    this.main = tag("main", { children: [this.body, this.tag_container] });
+    this.main = tag("main", { children: [this.body] });
     this.base = tag("div", {
-      children: [this.header, this.main, this.optionBase]
+      children: [this.header, this.tag_container, this.main, this.optionBase]
     });
     this.root.appendChild(this.base);
     document.addEventListener("keydown", (event) => {
@@ -435,7 +391,7 @@ class EngineView {
       label.innerHTML = `<span>${index}</span> <span>${choice.title}</span>`;
       const preview = document.createElement("p");
       preview.className = "preview";
-      preview.textContent = choice.transition();
+      preview.textContent = choice.transition;
       const label_container = document.createElement("div");
       const preview_container = document.createElement("div");
       label_container.appendChild(label);
@@ -445,15 +401,18 @@ class EngineView {
       div.appendChild(label_container);
       div.appendChild(preview_container);
       this.optionBase.appendChild(div);
+      for (const choice_tag of choice.tag) {
+        div.appendChild(tag("span", { className: "optionTag", textContent: choice_tag }));
+      }
       div.dataset.option = index;
       index++;
     }
     this.tags.innerHTML = "";
     for (const player_tag of this.engine.tag) {
-      this.tags.appendChild(tag("p", { textContent: player_tag }));
+      this.tags.appendChild(tag("span", { className: "tag", textContent: player_tag }));
     }
     this.title.innerText = engine.title;
-    window.scrollTo(0, this.body.scrollHeight);
+    window.scrollTo(0, 0);
   }
 }
 
