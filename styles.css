@@ -155,6 +155,7 @@ body {
 }
 
 .transition {
+	display: none;
 	color: #aaa;
 	font-style: italic;
 	margin-right: 8px;
