@@ -168,7 +168,7 @@ class DeleteTag {
   }
   undo(engine) {
     for (const tag2 of this.tags) {
-      if (engine["tag"].includes(tag2))
+      if (!engine["tag"].includes(tag2))
         engine["tag"].push(tag2);
     }
   }
