@@ -141,6 +141,102 @@ class Book extends Model {
   }
 }
 
+// src/models/CommandProcessor.js
+class AddTag {
+  constructor(tags = []) {
+    this.tags = tags;
+  }
+  do(engine) {
+    for (const tag2 of this.tags) {
+      if (!engine["tag"].includes(tag2))
+        engine["tag"].push(tag2);
+    }
+    return this;
+  }
+  undo(engine) {
+    engine["tag"] = engine["tag"].filter((index) => !this.tags.includes(index));
+  }
+}
+
+class DeleteTag {
+  constructor(tags = []) {
+    this.tags = tags;
+  }
+  do(engine) {
+    engine["tag"] = engine["tag"].filter((index) => !this.tags.includes(index));
+    return this;
+  }
+  undo(engine) {
+    for (const tag2 of this.tags) {
+      if (engine["tag"].includes(tag2))
+        engine["tag"].push(tag2);
+    }
+  }
+}
+
+class AddPage {
+  constructor(amount) {
+    this.amount = amount;
+  }
+  do(engine) {
+    engine.book.page += this.amount;
+    return this;
+  }
+  undo(engine) {
+    engine.book.book.pop();
+    engine.book.page -= this.amount;
+  }
+}
+
+class CommandProcessor {
+  constructor({ engine = null, history = [] }) {
+    this.engine = engine;
+    this.history = history;
+  }
+  interpret(statement) {
+    if (type(statement) !== "Array")
+      return null;
+    const bundle = [];
+    for (const line of statement) {
+      const tokens = line.split(" ");
+      const command = tokens[0];
+      const target = tokens[1] ?? null;
+      switch (command) {
+        case "add":
+          if (target === "tag")
+            bundle.push(new AddTag(tokens.splice(2)).do(this.engine));
+          if (target === "page")
+            bundle.push(new AddPage(tokens[2] ?? 1).do(this.engine));
+          break;
+        case "del":
+          if (target === "tag")
+            bundle.push(new DeleteTag(tokens.splice(2)).do(this.engine));
+          break;
+        case "reset":
+          this.engine.reset();
+          break;
+        case "stay":
+          this.engine.book.page--;
+          break;
+      }
+    }
+    this.history.push(bundle);
+    if (this.history.length > 15) {
+      this.history.shift();
+    }
+    return this;
+  }
+  undo() {
+    const commands = this.history.pop();
+    for (const command of commands) {
+      command.undo(this.engine);
+    }
+  }
+  reset() {
+    this.history = [];
+  }
+}
+
 // src/models/Engine.js
 class Engine extends Model {
   constructor({
@@ -150,12 +246,19 @@ class Engine extends Model {
     book = [],
     page = 0,
     start = "start",
-    title = "A Story"
+    title = "A Story",
+    history = [],
+    commandHistory = []
   }) {
     super();
     this.scenes = {};
     this.load.scenes(scenes);
     this.start = start;
+    this.history = history;
+    this.processor = new CommandProcessor({
+      engine: this,
+      history: commandHistory
+    });
     this.node = this.scenes[node] ?? this.scenes[start];
     if (this.node && this.node.title)
       this.title = this.node.title;
@@ -177,36 +280,15 @@ class Engine extends Model {
         return choices ?? null;
     }
   }
-  interpret(effect) {
-    if (type(effect) !== "Array")
-      return null;
-    for (const str of effect) {
-      const command = str.split(" ");
-      const op = command[0];
-      switch (op) {
-        case "add":
-          const add_prop = command[1];
-          if (add_prop === "tag") {
-            for (const tag2 of command.slice(2))
-              if (!this[add_prop].includes(tag2))
-                this[add_prop].push(tag2);
-          } else if (add_prop === "page") {
-            this.book.page += command[2] ?? 1;
-          }
-          break;
-        case "del":
-          const del_prop = command[1];
-          this[del_prop] = this[del_prop].filter((index) => !command.slice(2).includes(index));
-          break;
-        case "reset":
-          this.reset();
-          break;
-        case "stay":
-          this.book.page--;
-          break;
-      }
-    }
-    return this;
+  interpret(statement) {
+    this.processor.interpret(statement);
+  }
+  undo() {
+    this.processor.undo();
+    this.node = this.history.pop();
+    this.notify(this);
+    this.book.notify.load(this.book);
+    this.save();
   }
   choices() {
     let choices = {};
@@ -226,18 +308,26 @@ class Engine extends Model {
     const node_choice = this.node.choices(choice);
     if (type(node_choice.target) === "Null") {
       this.interpret(node_choice.effect);
+      this.history.push(this.node);
       return this.node;
     }
     const new_node = this.scenes[node_choice.target];
     if (type(new_node) == "Node") {
-      this.book.page++;
-      this.interpret(node_choice.effect);
-      this.interpret(new_node.effect);
+      const bundle = [];
+      if (type(node_choice.effect) === "Array")
+        bundle.push(...node_choice.effect);
+      if (type(new_node.effect) === "Array")
+        bundle.push(...new_node.effect);
+      this.interpret([...bundle, "add page"]);
       this.book.addParagraph([
         ["transition", node_choice.transition],
         ["body", new_node.body]
       ]);
+      this.history.push(this.node);
       this.node = new_node;
+    }
+    if (this.history.length > 4) {
+      this.history.shift();
     }
     if (this.node.title)
       this.title = this.node.title;
@@ -266,17 +356,21 @@ class Engine extends Model {
       page: this.book.page,
       tag: this.tag,
       title: this.title,
-      node: this.node.id
+      node: this.node.id,
+      history: this.history,
+      commandHistory: this.processor.history
     }));
   }
   reset() {
     this.tag = [];
     this.node = this.scenes[this.start];
     this.title = this.node.title ?? "A story";
+    this.history = [];
     this.book.reset([["body", this.node.body]]);
     this.save();
     this.notify(this);
     this.book.notify.load(this.book);
+    this.processor.reset();
   }
 }
 
@@ -343,9 +437,21 @@ class EngineView {
     this.reset.onclick = (event) => {
       this.engine.reset();
     };
+    this.back = tag("button", {
+      id: "back",
+      textContent: "Back",
+      className: "label"
+    });
+    this.back.onclick = (event) => {
+      this.engine.undo();
+    };
+    this.buttons = tag("div", {
+      id: "button_container",
+      children: [this.back, this.reset]
+    });
     this.header = tag("div", {
       id: "header",
-      children: [this.title, this.reset]
+      children: [this.title, this.buttons]
     });
     if (engine.title && engine.title)
       this.title.innerText = engine.node.title;
@@ -411,6 +517,10 @@ class EngineView {
     for (const player_tag of this.engine.tag) {
       this.tags.appendChild(tag("span", { className: "tag", textContent: player_tag }));
     }
+    if (engine.history.length == 0)
+      this.back.style.display = "none";
+    else
+      this.back.style.display = "revert";
     this.title.innerText = engine.title;
     window.scrollTo(0, 0);
   }
