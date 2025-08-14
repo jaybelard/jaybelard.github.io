@@ -193,8 +193,7 @@ body, html {
 
 main {
 	display: flex;
-	flex-direction: row;
-	gap: 32px;
+	flex-direction: column;
 }
 
 #tags {
@@ -329,15 +328,25 @@ main {
 
 fn-int.disabled {
 	color: #999;
-	border-bottom: 2px dotted #444;
 }
 
 fn-int.disabled:hover {
 	cursor: pointer;
 	color: #f0f0f0;
-	border-bottom: 2px dotted #444;
 	transition: 0.2s;
 }
+
+fn-desc.disabled {
+	border-bottom: dotted 1px;
+}
+
+fn-desc.disabled:hover {
+	cursor: pointer;
+	transition: 0.2s;
+	border-bottom: none;
+}
+
+
 
 .tag.race, .optionTag.race {
 	color: #cca593;
@@ -386,4 +395,16 @@ article {
 #psyche[data-psy="0"] {
 	border-color: darkred;
 	color: darkred;
+}
+
+#loc:empty {
+	display:none;
+}
+
+#loc {
+	font-size: 0.9em;
+	margin-top: 0.2em;
+	font-weight: bold;
+	font-family: courier;
+	border-bottom: dotted 1px;
 }

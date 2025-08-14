@@ -7913,7 +7913,7 @@ class Model {
 class Choice {
   constructor({
     target = null,
-    transition = null,
+    body = null,
     condition = null,
     valid = true,
     tag = [],
@@ -7926,7 +7926,7 @@ class Choice {
     this.condition = condition;
     this.effect = effect;
     this.title = title;
-    this.transition = transition;
+    this.body = body;
   }
 }
 
@@ -7977,7 +7977,9 @@ class Node {
     choices = [],
     effect = null,
     after = null,
-    intuition = {}
+    location = null,
+    intuition = {},
+    description = {}
   }) {
     this.id = id;
     this.title = title;
@@ -7985,22 +7987,33 @@ class Node {
     this.body = body;
     this.effect = effect;
     this.after = after;
+    this.location = location;
     this.choices = [];
     this.intuition = {};
+    this.description = {};
     for (const choice of choices)
       this.add.choice(choice);
     for (const intuit in intuition) {
-      this.intuition[intuit] = { ...intuition[intuit], enabled: false };
+      this.intuition[intuit] = { ...intuition[intuit], id: intuit, enabled: false };
+    }
+    for (const index in description) {
+      this.description[index] = { body: description[index], id: index, enabled: false };
     }
   }
   rend() {
-    let enabledInt = "";
+    let enabled = "";
+    for (const index in this.description) {
+      if (this.description[index].enabled && this.description[index].body)
+        enabled += this.description[index].body + `
+`;
+    }
     for (const intuit in this.intuition) {
       if (this.intuition[intuit].enabled && this.intuition[intuit].body)
-        enabledInt += this.intuition[intuit].body;
+        enabled += this.intuition[intuit].body + `
+`;
     }
     return this.body + `
-` + enabledInt;
+` + enabled;
   }
   add = {
     choice: (choice) => {
@@ -8103,6 +8116,21 @@ class AddDetection {
   }
 }
 
+class AddDescription {
+  constructor(keys) {
+    this.keys = keys;
+  }
+  do(engine) {
+    for (const key of this.keys) {
+      if (engine.node.description[key] && !engine.node.description[key].enabled) {
+        engine.node.description[key].enabled = true;
+      }
+    }
+    engine.notify(engine);
+    return this;
+  }
+}
+
 class SetAttribute {
   constructor(attribute, target) {
     this.attribute = attribute;
@@ -8149,6 +8177,8 @@ class CommandProcessor {
             bundle.push(new AddTag(tokens.splice(2)).do(this.engine));
           else if (target === "intuition")
             bundle.push(new AddDetection(tokens.splice(2)).do(this.engine));
+          else if (target === "description")
+            bundle.push(new AddDescription(tokens.splice(2)).do(this.engine));
           else if (target === "psyche")
             this.engine.psyche += parseInt(tokens[2]);
           break;
@@ -8317,13 +8347,10 @@ class Engine extends Model {
     scenes: (scenes) => {
       if (type(scenes) === "Object") {
         for (const scene in scenes) {
-          if (scenes[scene].id)
-            this.scenes[scene] = new Node({
-              id: scenes[scene].id,
-              ...scenes[scene]
-            });
-          else
-            this.scenes[scene] = new Node({ ...scene });
+          this.scenes[scene] = new Node({
+            id: scene,
+            ...scenes[scene]
+          });
         }
       }
     }
@@ -8399,8 +8426,9 @@ class EngineView {
       id: "tag_container",
       children: [this.psyche, this.tags]
     });
+    this.loc = tag("p", { id: "loc" });
     this.body = tag("article", { id: "body" });
-    this.main = tag("main", { children: [this.body] });
+    this.main = tag("main", { children: [this.loc, this.body] });
     this.base = tag("div", {
       id: "root",
       children: [this.header, this.tag_container, this.main, this.optionBase]
@@ -8435,16 +8463,31 @@ class EngineView {
   render(engine) {
     this.body.innerHTML = Sqrl.render(engine.node.rend()).split(`
 `).map((element) => `<p>${element}</p>`).join("");
-    const detections = document.querySelectorAll("fn-int");
-    for (const det of detections) {
-      const intuition = engine.node.intuition[det.dataset.id];
+    if (engine.node.location)
+      this.loc.innerText = `${engine.node.location}`;
+    else
+      this.loc.innerText = "";
+    const intuitions = document.querySelectorAll("fn-int");
+    for (const element of intuitions) {
+      const intuition = engine.node.intuition[element.dataset.id];
       if (engine.psyche > 0 && intuition && !intuition.enabled) {
-        det.className = "disabled";
-        det.addEventListener("click", function detectClicked(event) {
-          engine.interpret("add intuition " + det.dataset.id);
+        element.className = "disabled";
+        element.addEventListener("click", function detectClicked(event) {
+          engine.interpret("add intuition " + element.dataset.id);
         });
       } else
-        det.className = "enabled";
+        element.className = "enabled";
+    }
+    const descriptions = document.querySelectorAll("fn-desc");
+    for (const element of descriptions) {
+      const description = engine.node.description[element.dataset.id];
+      if (description && !description.enabled) {
+        element.className = "disabled";
+        element.addEventListener("click", function detectClicked(event) {
+          engine.interpret("add description " + element.dataset.id);
+        });
+      } else
+        element.className = "enabled";
     }
     const choices = engine.choices();
     let index = 1;
@@ -8460,7 +8503,7 @@ class EngineView {
       label.innerHTML = `<span class="index">${index}</span><span class="labelText">${choice.title}</span>`;
       const preview = document.createElement("p");
       preview.className = "preview";
-      preview.innerHTML = choice.transition;
+      preview.innerHTML = choice.body;
       const label_container = document.createElement("div");
       const preview_container = document.createElement("div");
       label_container.appendChild(label);
